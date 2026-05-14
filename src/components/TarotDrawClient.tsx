@@ -161,6 +161,9 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
     const [animatingIndex, setAnimatingIndex] = useState<number | null>(null);
     const [hasRevealed, setHasRevealed] = useState(false);
 
+    const [aiSummary, setAiSummary] = useState("");
+    const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+
     const activeCards = useMemo(() => {
         return cards.filter((card) => card.image_url);
     }, [cards]);
@@ -168,6 +171,10 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
     const remainingToDraw = Math.max(drawCount - drawnCards.length, 0);
     const isComplete = drawnCards.length === drawCount;
     const spreadConfig = SPREAD_CONFIGS[drawCount] || DEFAULT_SPREAD_CONFIG;
+
+
+
+
 
     function changeDrawCount(count: number) {
         resetDraw(count);
@@ -179,11 +186,80 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
         setSelectedDeckIndexes([]);
         setAnimatingIndex(null);
         setHasRevealed(false);
+        setAiSummary("");
+        setIsSummaryLoading(false);
     }
 
     function revealCards() {
         if (!isComplete) return;
+
         setHasRevealed(true);
+        generateAiSummary();
+    }
+
+    async function generateAiSummary() {
+        try {
+            setIsSummaryLoading(true);
+            setAiSummary("");
+
+            const payload = {
+                spreadTitle: spreadConfig.title,
+                spreadDescription: spreadConfig.description,
+                cards: drawnCards.map((item, index) => {
+                    const position = getSpreadPosition(index);
+
+                    return {
+                        index: index + 1,
+                        position: position.title,
+                        positionDescription: position.description,
+                        cardName: item.card.name,
+                        orientation: item.orientation === "upright" ? "Xuôi" : "Ngược",
+                        keywords:
+                            item.orientation === "upright"
+                                ? item.card.upright_keywords
+                                : item.card.reversed_keywords,
+                        uprightMeaning: item.card.upright_meaning,
+                        reversedMeaning: item.card.reversed_meaning,
+                        selectedMeaning:
+                            item.orientation === "upright"
+                                ? item.card.upright_meaning
+                                : item.card.reversed_meaning,
+                        focusedMeaning: getFocusedMeaning(item, position.title),
+                        loveMeaning: item.card.love_meaning,
+                        careerMeaning: item.card.career_meaning,
+                        moneyMeaning: item.card.money_meaning,
+                        advice: item.card.advice,
+                    };
+                }),
+            };
+
+            const res = await fetch("/api/tarot/summary", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                console.error("AI summary API error:", data);
+                setAiSummary(buildSpreadSummary() || "");
+                return;
+            }
+
+            if (data.summary) {
+                setAiSummary(data.summary);
+            } else {
+                setAiSummary(buildSpreadSummary() || "");
+            }
+        } catch (error) {
+            console.error("Generate AI summary error:", error);
+            setAiSummary(buildSpreadSummary() || "");
+        } finally {
+            setIsSummaryLoading(false);
+        }
     }
 
     function getSpreadPosition(index: number): SpreadPosition {
@@ -311,6 +387,9 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
         return `${opening} Bộ bài nổi bật với ${cardNames}. ${body} Tổng kết lại, thông điệp dành cho bạn là: ${finalAdvice}`;
     }
 
+
+
+
     function pickCard(deckIndex: number) {
         if (activeCards.length === 0) return;
         if (isComplete) return;
@@ -385,9 +464,8 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
                                     key={count}
                                     type="button"
                                     onClick={() => changeDrawCount(count)}
-                                    className={`${styles.countBtn} ${
-                                        drawCount === count ? styles.active : ""
-                                    }`}
+                                    className={`${styles.countBtn} ${drawCount === count ? styles.active : ""
+                                        }`}
                                 >
                                     <span>{count}</span>
                                 </button>
@@ -462,9 +540,8 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
                                     type="button"
                                     onClick={() => pickCard(index)}
                                     disabled={isSelected || isComplete || hasRevealed}
-                                    className={`${styles.deckCard} ${
-                                        isSelected ? styles.selected : ""
-                                    } ${isAnimating ? styles.animating : ""}`}
+                                    className={`${styles.deckCard} ${isSelected ? styles.selected : ""
+                                        } ${isAnimating ? styles.animating : ""}`}
                                     aria-label={`Rút lá bài số ${index + 1}`}
                                 >
                                     <img src={CARD_BACK} alt="Mặt sau lá bài Tarot" />
@@ -510,9 +587,8 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
                                     >
                                         <div className={styles.flipScene}>
                                             <div
-                                                className={`${styles.flipCard} ${
-                                                    hasRevealed ? styles.revealed : ""
-                                                }`}
+                                                className={`${styles.flipCard} ${hasRevealed ? styles.revealed : ""
+                                                    }`}
                                             >
                                                 <div
                                                     className={`${styles.flipFace} ${styles.flipFront}`}
@@ -520,11 +596,10 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
                                                     <img
                                                         src={item.card.image_url}
                                                         alt={item.card.name}
-                                                        className={`${styles.cardImg} ${
-                                                            item.orientation === "reversed"
-                                                                ? styles.reversed
-                                                                : ""
-                                                        }`}
+                                                        className={`${styles.cardImg} ${item.orientation === "reversed"
+                                                            ? styles.reversed
+                                                            : ""
+                                                            }`}
                                                     />
                                                 </div>
 
@@ -650,13 +725,18 @@ export default function TarotDrawClient({ cards }: { cards: TarotCard[] }) {
                             })}
                         </div>
 
-                        {hasRevealed && spreadSummary && (
+                        {hasRevealed && (
                             <div className={styles.spreadSummary}>
                                 <p className={styles.spreadSummaryLabel}>
                                     Tổng kết trải bài của bạn:
                                 </p>
 
-                                <p>{spreadSummary}</p>
+                                {isSummaryLoading ? (
+                                    <p>Đang phân tích năng lượng các lá bài...</p>
+                                ) : (
+                                    <p>{aiSummary || spreadSummary || "Chưa có tổng kết."}</p>
+                                )}
+
                             </div>
                         )}
                     </div>
